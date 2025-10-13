@@ -1,0 +1,109 @@
+Time,Type,Location,Message,Details,ML_Flag,ML_Details
+2025-10-11 23:34:26.463,ERROR,Terminal,Traceback (most recent call last):,Traceback (most recent call last):,0,
+2025-10-11 23:34:26.472,ERROR,Terminal,"File ""C:\MERN_TT\dashboard1.py"", line 255, in open_input_source_dialog
+    dialog.inputsourceselected.connect(self.handle_input_source_selected)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^","File ""C:\MERN_TT\dashboard1.py"", line 255, in open_input_source_dialog
+    dialog.inputsourceselected.connect(self.handle_input_source_selected)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^",0,
+2025-10-11 23:34:26.479,ERROR,Terminal,AttributeError: 'InputSourceDialog' object has no attribute 'inputsourceselected'. Did you mean: 'input_source_selected'?,AttributeError: 'InputSourceDialog' object has no attribute 'inputsourceselected'. Did you mean: 'input_source_selected'?,0,
+2025-10-11 23:34:27.424,ERROR,Terminal,Traceback (most recent call last):,Traceback (most recent call last):,0,
+2025-10-11 23:34:27.438,ERROR,Terminal,"File ""C:\MERN_TT\dashboard1.py"", line 255, in open_input_source_dialog
+    dialog.inputsourceselected.connect(self.handle_input_source_selected)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^","File ""C:\MERN_TT\dashboard1.py"", line 255, in open_input_source_dialog
+    dialog.inputsourceselected.connect(self.handle_input_source_selected)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^",0,
+2025-10-11 23:34:27.453,ERROR,Terminal,AttributeError: 'InputSourceDialog' object has no attribute 'inputsourceselected'. Did you mean: 'input_source_selected'?,AttributeError: 'InputSourceDialog' object has no attribute 'inputsourceselected'. Did you mean: 'input_source_selected'?,0,
+2025-10-11 23:34:34.806,ERROR,Terminal,Traceback (most recent call last):,Traceback (most recent call last):,0,
+2025-10-11 23:34:34.827,ERROR,Terminal,"File ""C:\MERN_TT\dashboard1.py"", line 255, in open_input_source_dialog
+    dialog.inputsourceselected.connect(self.handle_input_source_selected)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^","File ""C:\MERN_TT\dashboard1.py"", line 255, in open_input_source_dialog
+    dialog.inputsourceselected.connect(self.handle_input_source_selected)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^",0,
+2025-10-11 23:34:34.851,ERROR,Terminal,AttributeError: 'InputSourceDialog' object has no attribute 'inputsourceselected'. Did you mean: 'input_source_selected'?,AttributeError: 'InputSourceDialog' object has no attribute 'inputsourceselected'. Did you mean: 'input_source_selected'?,0,
+2025-10-11 23:34:35.530,ERROR,Terminal,Traceback (most recent call last):,Traceback (most recent call last):,0,
+2025-10-11 23:34:35.559,ERROR,Terminal,"File ""C:\MERN_TT\dashboard1.py"", line 255, in open_input_source_dialog
+    dialog.inputsourceselected.connect(self.handle_input_source_selected)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^","File ""C:\MERN_TT\dashboard1.py"", line 255, in open_input_source_dialog
+    dialog.inputsourceselected.connect(self.handle_input_source_selected)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^",0,
+2025-10-11 23:34:35.593,ERROR,Terminal,AttributeError: 'InputSourceDialog' object has no attribute 'inputsourceselected'. Did you mean: 'input_source_selected'?,AttributeError: 'InputSourceDialog' object has no attribute 'inputsourceselected'. Did you mean: 'input_source_selected'?,0,
+2025-10-11 23:34:35.785,ERROR,Terminal,Traceback (most recent call last):,Traceback (most recent call last):,0,
+2025-10-11 23:34:35.822,ERROR,Terminal,"File ""C:\MERN_TT\dashboard1.py"", line 255, in open_input_source_dialog
+    dialog.inputsourceselected.connect(self.handle_input_source_selected)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^","File ""C:\MERN_TT\dashboard1.py"", line 255, in open_input_source_dialog
+    dialog.inputsourceselected.connect(self.handle_input_source_selected)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^",0,
+2025-10-11 23:34:35.863,ERROR,Terminal,AttributeError: 'InputSourceDialog' object has no attribute 'inputsourceselected'. Did you mean: 'input_source_selected'?,AttributeError: 'InputSourceDialog' object has no attribute 'inputsourceselected'. Did you mean: 'input_source_selected'?,0,
+2025-10-11 23:34:35.974,ERROR,Terminal,Traceback (most recent call last):,Traceback (most recent call last):,0,
+2025-10-11 23:34:36.020,ERROR,Terminal,"File ""C:\MERN_TT\dashboard1.py"", line 255, in open_input_source_dialog
+    dialog.inputsourceselected.connect(self.handle_input_source_selected)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^","File ""C:\MERN_TT\dashboard1.py"", line 255, in open_input_source_dialog
+    dialog.inputsourceselected.connect(self.handle_input_source_selected)
+    ^^^^^^^^^^^^^^^^^^^^^^^^^^",0,
+2025-10-11 23:34:36.069,ERROR,Terminal,AttributeError: 'InputSourceDialog' object has no attribute 'inputsourceselected'. Did you mean: 'input_source_selected'?,AttributeError: 'InputSourceDialog' object has no attribute 'inputsourceselected'. Did you mean: 'input_source_selected'?,0,
+2025-10-13 01:18:55.183,ERROR,Terminal,Traceback (most recent call last):,Traceback (most recent call last):,0,
+2025-10-13 01:18:55.243,ERROR,Terminal,"File ""C:\MERN_TT\cockpit_tab.py"", line 74, in paintEvent
+    pen_bg = QPen(self.bg_arc_color, max(10, arc_w * 0.06), cap=Qt.RoundCap)","File ""C:\MERN_TT\cockpit_tab.py"", line 74, in paintEvent
+    pen_bg = QPen(self.bg_arc_color, max(10, arc_w * 0.06), cap=Qt.RoundCap)",0,
+2025-10-13 01:18:55.305,ERROR,Terminal,AttributeError: PySide6.QtGui.QPen.__init__(): unsupported keyword 'cap',AttributeError: PySide6.QtGui.QPen.__init__(): unsupported keyword 'cap',0,
+2025-10-13 01:18:55.368,ERROR,Terminal,Traceback (most recent call last):,Traceback (most recent call last):,0,
+2025-10-13 01:18:55.435,ERROR,Terminal,"File ""C:\MERN_TT\cockpit_tab.py"", line 74, in paintEvent
+    pen_bg = QPen(self.bg_arc_color, max(10, arc_w * 0.06), cap=Qt.RoundCap)","File ""C:\MERN_TT\cockpit_tab.py"", line 74, in paintEvent
+    pen_bg = QPen(self.bg_arc_color, max(10, arc_w * 0.06), cap=Qt.RoundCap)",0,
+2025-10-13 01:18:55.500,ERROR,Terminal,AttributeError: PySide6.QtGui.QPen.__init__(): unsupported keyword 'cap',AttributeError: PySide6.QtGui.QPen.__init__(): unsupported keyword 'cap',0,
+2025-10-13 01:18:55.573,ERROR,Terminal,Traceback (most recent call last):,Traceback (most recent call last):,0,
+2025-10-13 01:18:55.647,ERROR,Terminal,"File ""C:\MERN_TT\cockpit_tab.py"", line 74, in paintEvent
+    pen_bg = QPen(self.bg_arc_color, max(10, arc_w * 0.06), cap=Qt.RoundCap)","File ""C:\MERN_TT\cockpit_tab.py"", line 74, in paintEvent
+    pen_bg = QPen(self.bg_arc_color, max(10, arc_w * 0.06), cap=Qt.RoundCap)",0,
+2025-10-13 01:18:55.729,ERROR,Terminal,AttributeError: PySide6.QtGui.QPen.__init__(): unsupported keyword 'cap',AttributeError: PySide6.QtGui.QPen.__init__(): unsupported keyword 'cap',0,
+2025-10-13 01:18:55.820,ERROR,Terminal,Traceback (most recent call last):,Traceback (most recent call last):,0,
+2025-10-13 01:18:55.912,ERROR,Terminal,"File ""C:\MERN_TT\cockpit_tab.py"", line 194, in paintEvent
+    grad_brush = QLinearGradient(fill_rect.topLeft(), fill_rect.bottomLeft())
+                 ^^^^^^^^^^^^^^^","File ""C:\MERN_TT\cockpit_tab.py"", line 194, in paintEvent
+    grad_brush = QLinearGradient(fill_rect.topLeft(), fill_rect.bottomLeft())
+                 ^^^^^^^^^^^^^^^",0,
+2025-10-13 01:18:56.006,ERROR,Terminal,NameError: name 'QLinearGradient' is not defined,NameError: name 'QLinearGradient' is not defined,0,
+2025-10-13 01:18:56.471,ERROR,Terminal,Traceback (most recent call last):,Traceback (most recent call last):,0,
+2025-10-13 01:18:56.566,ERROR,Terminal,"File ""C:\MERN_TT\cockpit_tab.py"", line 74, in paintEvent
+    pen_bg = QPen(self.bg_arc_color, max(10, arc_w * 0.06), cap=Qt.RoundCap)","File ""C:\MERN_TT\cockpit_tab.py"", line 74, in paintEvent
+    pen_bg = QPen(self.bg_arc_color, max(10, arc_w * 0.06), cap=Qt.RoundCap)",0,
+2025-10-13 01:18:56.662,ERROR,Terminal,AttributeError: PySide6.QtGui.QPen.__init__(): unsupported keyword 'cap',AttributeError: PySide6.QtGui.QPen.__init__(): unsupported keyword 'cap',0,
+2025-10-13 01:18:56.763,ERROR,Terminal,Traceback (most recent call last):,Traceback (most recent call last):,0,
+2025-10-13 01:18:56.868,ERROR,Terminal,"File ""C:\MERN_TT\cockpit_tab.py"", line 74, in paintEvent
+    pen_bg = QPen(self.bg_arc_color, max(10, arc_w * 0.06), cap=Qt.RoundCap)","File ""C:\MERN_TT\cockpit_tab.py"", line 74, in paintEvent
+    pen_bg = QPen(self.bg_arc_color, max(10, arc_w * 0.06), cap=Qt.RoundCap)",0,
+2025-10-13 01:18:56.974,ERROR,Terminal,AttributeError: PySide6.QtGui.QPen.__init__(): unsupported keyword 'cap',AttributeError: PySide6.QtGui.QPen.__init__(): unsupported keyword 'cap',0,
+2025-10-13 01:18:57.089,ERROR,Terminal,Traceback (most recent call last):,Traceback (most recent call last):,0,
+2025-10-13 01:18:57.204,ERROR,Terminal,"File ""C:\MERN_TT\cockpit_tab.py"", line 74, in paintEvent
+    pen_bg = QPen(self.bg_arc_color, max(10, arc_w * 0.06), cap=Qt.RoundCap)","File ""C:\MERN_TT\cockpit_tab.py"", line 74, in paintEvent
+    pen_bg = QPen(self.bg_arc_color, max(10, arc_w * 0.06), cap=Qt.RoundCap)",0,
+2025-10-13 01:18:57.317,ERROR,Terminal,AttributeError: PySide6.QtGui.QPen.__init__(): unsupported keyword 'cap',AttributeError: PySide6.QtGui.QPen.__init__(): unsupported keyword 'cap',0,
+2025-10-13 01:18:57.427,ERROR,Terminal,Traceback (most recent call last):,Traceback (most recent call last):,0,
+2025-10-13 01:18:57.545,ERROR,Terminal,"File ""C:\MERN_TT\cockpit_tab.py"", line 194, in paintEvent
+    grad_brush = QLinearGradient(fill_rect.topLeft(), fill_rect.bottomLeft())
+                 ^^^^^^^^^^^^^^^","File ""C:\MERN_TT\cockpit_tab.py"", line 194, in paintEvent
+    grad_brush = QLinearGradient(fill_rect.topLeft(), fill_rect.bottomLeft())
+                 ^^^^^^^^^^^^^^^",0,
+2025-10-13 01:18:57.668,ERROR,Terminal,NameError: name 'QLinearGradient' is not defined,NameError: name 'QLinearGradient' is not defined,0,
+2025-10-13 01:18:58.631,ERROR,Terminal,Traceback (most recent call last):,Traceback (most recent call last):,0,
+2025-10-13 01:18:58.755,ERROR,Terminal,"File ""C:\MERN_TT\cockpit_tab.py"", line 74, in paintEvent
+    pen_bg = QPen(self.bg_arc_color, max(10, arc_w * 0.06), cap=Qt.RoundCap)","File ""C:\MERN_TT\cockpit_tab.py"", line 74, in paintEvent
+    pen_bg = QPen(self.bg_arc_color, max(10, arc_w * 0.06), cap=Qt.RoundCap)",0,
+2025-10-13 01:18:58.875,ERROR,Terminal,AttributeError: PySide6.QtGui.QPen.__init__(): unsupported keyword 'cap',AttributeError: PySide6.QtGui.QPen.__init__(): unsupported keyword 'cap',0,
+2025-10-13 01:18:58.999,ERROR,Terminal,Traceback (most recent call last):,Traceback (most recent call last):,0,
+2025-10-13 01:18:59.133,ERROR,Terminal,"File ""C:\MERN_TT\cockpit_tab.py"", line 74, in paintEvent
+    pen_bg = QPen(self.bg_arc_color, max(10, arc_w * 0.06), cap=Qt.RoundCap)","File ""C:\MERN_TT\cockpit_tab.py"", line 74, in paintEvent
+    pen_bg = QPen(self.bg_arc_color, max(10, arc_w * 0.06), cap=Qt.RoundCap)",0,
+2025-10-13 01:18:59.267,ERROR,Terminal,AttributeError: PySide6.QtGui.QPen.__init__(): unsupported keyword 'cap',AttributeError: PySide6.QtGui.QPen.__init__(): unsupported keyword 'cap',0,
+2025-10-13 01:18:59.401,ERROR,Terminal,Traceback (most recent call last):,Traceback (most recent call last):,0,
+2025-10-13 01:18:59.539,ERROR,Terminal,"File ""C:\MERN_TT\cockpit_tab.py"", line 74, in paintEvent
+    pen_bg = QPen(self.bg_arc_color, max(10, arc_w * 0.06), cap=Qt.RoundCap)","File ""C:\MERN_TT\cockpit_tab.py"", line 74, in paintEvent
+    pen_bg = QPen(self.bg_arc_color, max(10, arc_w * 0.06), cap=Qt.RoundCap)",0,
+2025-10-13 01:18:59.690,ERROR,Terminal,AttributeError: PySide6.QtGui.QPen.__init__(): unsupported keyword 'cap',AttributeError: PySide6.QtGui.QPen.__init__(): unsupported keyword 'cap',0,
+2025-10-13 01:18:59.845,ERROR,Terminal,Traceback (most recent call last):,Traceback (most recent call last):,0,
+2025-10-13 01:18:59.997,ERROR,Terminal,"File ""C:\MERN_TT\cockpit_tab.py"", line 194, in paintEvent
+    grad_brush = QLinearGradient(fill_rect.topLeft(), fill_rect.bottomLeft())
+                 ^^^^^^^^^^^^^^^","File ""C:\MERN_TT\cockpit_tab.py"", line 194, in paintEvent
+    grad_brush = QLinearGradient(fill_rect.topLeft(), fill_rect.bottomLeft())
+                 ^^^^^^^^^^^^^^^",0,
+2025-10-13 01:19:00.151,ERROR,Terminal,NameError: name 'QLinearGradient' is not defined,NameError: name 'QLinearGradient' is not defined,0,
