@@ -1,38 +1,41 @@
 # main.py
-import sys
-import os
-
-# Force software OpenGL as fallback
-os.environ['QT_OPENGL'] = 'software'
+import sys, os
+os.environ["QTOPENGL"] = "software"
 os.environ["QT_QUICK_BACKEND"] = "software"
-os.environ["VISPY_GL_BACKEND"] = "pyqt6"
-os.environ["VISPY_USE_APP"] = "PyQt6"
 
-from PySide6.QtCore import Qt
 from PySide6.QtWidgets import QApplication
 from qt_material import apply_stylesheet
 from control import LoginWindow
 
-# Use desktop OpenGL if available
-from PySide6.QtOpenGLWidgets import QOpenGLWidget
-QApplication.setAttribute(Qt.AA_UseDesktopOpenGL)
+class MainApp:
+    def __init__(self):
+        self.app = QApplication(sys.argv)
+        apply_stylesheet(self.app, theme='light_blue.xml')
+
+    def run(self):
+        self.show_login()
+
+    def show_login(self):
+        try:
+            self.window = LoginWindow()
+            self.window.show()
+            self.window.login_successful.connect(self.show_dashboard)
+        except Exception as e:
+            import traceback
+            print("Error creating LoginWindow:", e)
+            print(traceback.format_exc())
+            sys.exit(1)
+        sys.exit(self.app.exec())
+
+    def show_dashboard(self):
+        try:
+            from dashboard1 import MainDashboardWindow
+            self.dash = MainDashboardWindow()
+            self.dash.show()
+        except Exception as e:
+            import traceback
+            print("Error creating MainDashboardWindow:", e)
+            print(traceback.format_exc())
 
 if __name__ == "__main__":
-    print("Starting QApplication")
-    app = QApplication(sys.argv)
-    
-    print("Applying stylesheet")
-    apply_stylesheet(app, theme='light_blue.xml')
-
-    print("Creating LoginWindow")
-    try:
-        window = LoginWindow()
-        print("Showing LoginWindow")
-        window.show()
-    except Exception as e:
-        import traceback
-        print("Error creating LoginWindow:", e)
-        print(traceback.format_exc())
-
-    print("Entering event loop")
-    sys.exit(app.exec())
+    MainApp().run()

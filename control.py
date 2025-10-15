@@ -3,12 +3,14 @@ from PySide6.QtWidgets import (
     QWidget, QLabel, QLineEdit, QPushButton, QVBoxLayout, QMessageBox, QFrame,
     QGraphicsDropShadowEffect
 )
-from PySide6.QtCore import Qt
+from PySide6.QtCore import Qt, Signal   # ✅ Added Signal import
 from PySide6.QtGui import QFont, QPixmap, QColor
-from dashboard1 import DashboardWindow
 import os
 
+
 class LoginWindow(QWidget):
+    login_successful = Signal()   # ✅ Added signal
+
     def __init__(self):
         super().__init__()
         print("Initializing LoginWindow UI")
@@ -91,9 +93,8 @@ class LoginWindow(QWidget):
         allowed_passwords = ["rudra", "RUDRA", "Rudra"]
         try:
             if any(self.input.text().lower() == p.lower() for p in allowed_passwords):
-                print("Login successful, opening DashboardWindow")
-                self.dashboard = DashboardWindow()
-                self.dashboard.show()
+                print("Login successful → emitting signal to main")
+                self.login_successful.emit()  # ✅ emit signal to main.py
                 self.close()
             else:
                 print("Login failed: Incorrect Launch Code")
@@ -104,7 +105,7 @@ class LoginWindow(QWidget):
                 self.input.setFocus()
         except Exception as e:
             import traceback
-            error_message = f"Failed to open dashboard:\n{str(e)}"
+            error_message = f"Failed during login:\n{str(e)}"
             print("Exception in check_login:", e)
             print(traceback.format_exc())
             QMessageBox.critical(self, "Error", error_message)

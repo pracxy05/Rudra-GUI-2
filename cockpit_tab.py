@@ -1,600 +1,514 @@
-# cockpit_tab.py
-# Robust Cockpit tab — Plotly gauges (live JS updates), altitude cylinder with rocket,
-# compact camera boxes with upload/play/pause/restart/expand icons, and defensive error handling.
-#
-# Exposes: CockpitWidget, CockpitFloatingWindow
-# Default rocket path: r"C:\MERN_TT\assets\rocket.png"
-
 import os
 import sys
 import math
+import csv
 import time
-import tempfile
 from pathlib import Path
 
-# In some environments QtWebEngine's GPU causes repeated errors; disabling GPU can help.
-# If you prefer GPU, remove the next line.
 os.environ.setdefault("QTWEBENGINE_CHROMIUM_FLAGS", "--disable-gpu")
 
-from PySide6.QtCore import Qt, QTimer, QUrl, QSize, QRectF
-from PySide6.QtGui import (
-    QPixmap, QImage, QColor, QPainter, QFont, QPen, QBrush, QLinearGradient
-)
-from PySide6.QtWidgets import (
-    QWidget, QLabel, QVBoxLayout, QHBoxLayout, QGridLayout, QFrame,
-    QScrollArea, QSizePolicy, QPushButton, QDialog, QApplication, QFileDialog
-)
+from PySide6.QtCore import Qt, QTimer, QUrl, QSize
+from PySide6.QtGui import QPixmap, QImage, QColor, QPainter, QFont, QPen, QBrush, QLinearGradient
+from PySide6.QtWidgets import QWidget, QLabel, QVBoxLayout, QHBoxLayout, QGridLayout, QFrame, QScrollArea, QSizePolicy, QPushButton, QDialog, QApplication, QFileDialog
 
-# WebEngine (Plotly) — optional fallback handled below
-_HAS_WEBENGINE = True
+# Optional WebEngine/Multimedia imports
+HAS_WEBENGINE = True
 try:
     from PySide6.QtWebEngineWidgets import QWebEngineView
-except Exception as e:
-    print("Warning: QWebEngineView import failed:", e)
-    _HAS_WEBENGINE = False
+except Exception:
+    HAS_WEBENGINE = False
 
-# Multimedia (optional)
-_USE_MULTIMEDIA = True
+USE_MULTIMEDIA = True
 try:
     from PySide6.QtMultimedia import QMediaPlayer, QAudioOutput
     from PySide6.QtMultimediaWidgets import QVideoWidget
-except Exception as e:
-    print("Multimedia not available:", e)
-    _USE_MULTIMEDIA = False
+except Exception:
+    USE_MULTIMEDIA = False
 
-# OpenCV optional support for camera frames
-_HAS_CV2 = True
 try:
     import cv2
+    HAS_CV2 = True
 except Exception:
-    _HAS_CV2 = False
+    HAS_CV2 = False
 
-# ---------------- Helper / safe decorator ----------------
-def safe(func):
-    """Wrap UI critical methods to prevent uncaught exceptions from crashing paintEvent loops."""
+def silent(func):
     def wrapped(*args, **kwargs):
         try:
             return func(*args, **kwargs)
         except Exception as e:
-            print(f"Exception in {func.__name__}: {e}")
+            print(f"Exception in {func.__name__}:", e)
             return None
     return wrapped
 
-# ---------------- Plotly HTML generator ----------------
-def make_plotly_gauge_html(title, min_v, max_v, init_v, bar_color="#2B84D6", text_color="#e6eef8"):
-    """
-    Returns full HTML string embedding a Plotly indicator and an `updateGauge(value)` JS function.
-    We'll load this HTML via QWebEngineView.setHtml and update via runJavaScript.
-    """
+def make_plotly_gauge_html(title, minv, maxv, initv, barcolor="#2B84D6", textcolor="#111111"):
     html = f"""<!doctype html>
 <html>
 <head>
-  <meta charset="utf-8" />
-  <style>
-    html,body{{margin:0;height:100%;background:transparent}}
-    #g{{width:100%;height:100%;}}
-    .plotly .modebar{{display:none !important;}}
-  </style>
-  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+<meta charset="utf-8">
+<style>
+html,body{{margin:0;height:100%;background:transparent}}
+body{{font-family:Segoe UI,sans-serif}}
+.plotly .modebar{{display:none!important}}
+</style>
+<script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
 </head>
 <body>
-  <div id="g"></div>
-  <script>
-    var data = [{{
-      type: "indicator",
-      mode: "gauge+number",
-      value: {float(init_v)},
-      title: {{ text: "{title}", font: {{size:16, color: "{text_color}"}} }},
-      number: {{ font: {{ size:18, color: "{text_color}" }} }},
-      gauge: {{
-        axis: {{ range: [{min_v}, {max_v}], tickcolor: "#aab3bf", nticks: 6 }},
-        bar: {{ color: "{bar_color}" }},
-        bgcolor: "rgba(0,0,0,0)",
-        borderwidth: 0,
-        steps: [
-          {{range: [{min_v}, {(min_v + max_v) / 2}], color: "rgba(0,128,255,0.08)"}},
-          {{range: [{(min_v + max_v) / 2}, {(min_v + max_v) * 0.85}], color: "rgba(0,128,255,0.05)"}},
-          {{range: [{(min_v + max_v) * 0.85}, {max_v}], color: "rgba(255,80,80,0.06)"}}
+<div id="g"></div>
+<script>
+var data = [{{
+    type: "indicator",
+    mode: "gauge+number",
+    value: {initv},
+    title: {{text: "{title}", font: {{size:22, color:"{textcolor}"}}}},
+    number: {{font: {{size: 24, color: "{textcolor}"}}}},
+    gauge: {{
+        axis: {{range:[{minv},{maxv}], tickcolor:"#333", nticks:6, tickfont:{{size:13, color:"{textcolor}"}}}},
+        bar: {{color:"{barcolor}"}},
+        bgcolor:"rgba(0,0,0,0)", borderwidth:0,
+        steps:[
+            {{range:[{minv},{maxv}], color:"rgba(0,128,255,0.08)"}}
         ],
-        threshold: {{ value: {max_v * 0.92}, line: {{color: "red", width: 3}}, thickness: 0.75 }}
-      }}
-    }}];
-    var layout = {{
-      margin: {{ l:8, r:8, t:14, b:8 }},
-      paper_bgcolor: "rgba(0,0,0,0)",
-      font: {{ family: "Segoe UI", color: "{text_color}" }},
-      height: 180
-    }};
-    Plotly.newPlot('g', data, layout, {{displayModeBar:false, responsive:true}});
-
-    window.updateGauge = function(v) {{
-      try {{
-        var val = Number(v) || 0;
-        Plotly.restyle('g', {{ 'value': [[val]] }}, [0]);
-      }} catch(e) {{
-        console.error("updateGauge:", e);
-      }}
-    }};
-  </script>
+        threshold: {{value: {0.92*maxv}, line: {{color: "red", width: 3}}, thickness:0.75}}
+    }}
+}}];
+var layout = {{margin:{{l:8,r:8,t:12,b:8}}, paper_bgcolor:"rgba(0,0,0,0)", font:{{family:"Segoe UI", color:"{textcolor}"}}, height:180}};
+Plotly.newPlot('g', data, layout, {{displayModeBar:false, responsive:true}});
+window.updateGauge = function(val) {{
+    try{{
+        Plotly.restyle('g', 'value', [Number(val) || 0], 0);
+    }}catch(e){{}}
+}};
+</script>
 </body>
-</html>
-"""
+</html>"""
     return html
 
-# ---------------- Altitude cylinder (QPainter) ----------------
 class AltitudeCylinder(QWidget):
-    def __init__(self, max_alt=1500, rocket_path=None, parent=None):
+    def __init__(self, maxalt=1500, rocketpath=None, parent=None):
         super().__init__(parent)
-        print("AltitudeCylinder: init (rocket_path=%r)" % rocket_path)
-        self.max_alt = float(max_alt)
+        self.maxalt = float(maxalt)
         self.alt = 0.0
-        self.rocket_path = rocket_path
-        self._rocket = None
-        if self.rocket_path and os.path.exists(self.rocket_path):
-            try:
-                self._rocket = QPixmap(self.rocket_path)
-            except Exception as e:
-                print("AltitudeCylinder: failed to load rocket image:", e)
-                self._rocket = None
-        else:
-            self._rocket = None
-
+        self.rocketpath = rocketpath
+        self.rocket = QPixmap(self.rocketpath) if self.rocketpath and os.path.exists(self.rocketpath) else None
         self.setMinimumSize(120, 420)
-        self.setSizePolicy(QSizePolicy.Policy.Fixed, QSizePolicy.Policy.Expanding)
-        self.title_font = QFont("Segoe UI", 11, QFont.Bold)
-        self.value_font = QFont("Consolas", 14, QFont.Bold)
+        self.setSizePolicy(QSizePolicy.Fixed, QSizePolicy.Expanding)
+        self.titlefont = QFont("Segoe UI", 11, QFont.Bold)
+        self.valuefont = QFont("Consolas", 14, QFont.Bold)
 
+    @silent
     def setAltitude(self, value):
         try:
             v = float(value)
         except Exception:
             v = 0.0
-        self.alt = max(0.0, min(self.max_alt, v))
+        self.alt = max(0.0, min(self.maxalt, v))
         self.update()
 
-    @safe
     def paintEvent(self, event):
         p = QPainter(self)
         p.setRenderHint(QPainter.Antialiasing)
         r = self.rect()
-        # background panel
-        p.fillRect(r, QColor("#131619"))
-
         pad = 10
         inner = r.adjusted(pad, pad, -pad, -pad)
-        p.setPen(QPen(QColor("#2b3136"), 1.2))
-        p.setBrush(QBrush(QColor("#0f1113")))
+        p.fillRect(r, QColor("#f2f2f2"))
+        p.setPen(QPen(QColor("#d0d0d0"), 1.2))
+        p.setBrush(QBrush(QColor("#e8e8e8")))
         p.drawRoundedRect(inner, 12, 12)
-
-        left = inner.left() + 12
+        left = inner.left()
         right = inner.right() - 12
         top = inner.top() + 24
         bottom = inner.bottom() - 38
         width = right - left
         height = bottom - top
 
-        # track
-        p.setBrush(QBrush(QColor("#0a0c0e")))
-        p.setPen(QPen(QColor("#23282c"), 1.0))
+        p.setBrush(QBrush(QColor("#ededed")))
+        p.setPen(QPen(QColor("#cccccc"), 1.0))
         p.drawRoundedRect(left, top, width, height, 8, 8)
 
-        # fill gradient
-        ratio = (self.alt / self.max_alt) if self.max_alt > 0 else 0.0
-        fill_h = max(6, height * ratio)
-        fill_y = bottom - fill_h
-        grad = QLinearGradient(left, fill_y, left, bottom)
+        ratio = self.alt/self.maxalt if self.maxalt else 0
+        fillh = max(6, height*ratio)
+        filly = bottom - fillh
+        grad = QLinearGradient(left, filly, left, bottom)
         grad.setColorAt(0.0, QColor("#4fd2ff"))
         grad.setColorAt(1.0, QColor("#006b96"))
         p.setBrush(QBrush(grad))
         p.setPen(Qt.NoPen)
-        draw_h = fill_h - 6 if fill_h > 12 else fill_h
-        p.drawRoundedRect(left + 6, fill_y + 6, width - 12, draw_h, 6, 6)
+        drawh = fillh - 6 if fillh > 12 else fillh
+        p.drawRoundedRect(left+6, filly+6, width-12, drawh, 6, 6)
 
-        # ticks + numbers
-        p.setPen(QPen(QColor("#9aa0a6"), 1.0))
+        p.setPen(QPen(QColor("#111111")))
         p.setFont(QFont("Consolas", 9))
         ticks = 6
         for i in range(ticks):
-            frac = i / (ticks - 1)
-            y = bottom - frac * height
-            p.drawLine(right + 6, int(y), right + 20, int(y))
-            val = int(round(frac * self.max_alt))
-            p.drawText(right + 24, int(y - 8), 40, 16, Qt.AlignLeft | Qt.AlignVCenter, str(val))
-
-        # rocket icon (if available)
-        if self._rocket:
-            rp_w = min(36, int(width * 0.5))
-            rp_h = rp_w
-            rocket_y = int(bottom - fill_h - rp_h / 2)
-            rocket_x = int(left + width / 2 - rp_w / 2)
-            rocket_y = max(top + 4, min(rocket_y, bottom - rp_h - 4))
-            p.drawPixmap(rocket_x, rocket_y, rp_w, rp_h, self._rocket)
-
-        # title & numeric
-        p.setPen(QPen(QColor("#e6eef8")))
-        p.setFont(self.title_font)
-        p.drawText(left, inner.top() + 6, width, 20, Qt.AlignCenter, "Altitude")
-        p.setFont(self.value_font)
-        p.drawText(left, inner.bottom() - 34, width, 28, Qt.AlignCenter, f"{int(self.alt)} m")
+            frac = i / (ticks-1)
+            y = bottom - frac*height
+            p.drawLine(right+6, int(y), right+20, int(y))
+            val = int(round(frac * self.maxalt))
+            p.drawText(right+24, int(y)-8, 40, 16, Qt.AlignLeft | Qt.AlignVCenter, str(val))
+        if self.rocket:
+            rpw = min(36, int(width*0.5))
+            rph = rpw
+            rockety = int(bottom - fillh - rph/2)
+            rocketx = int(left + width/2 - rpw/2)
+            rockety = max(top+4, min(rockety, bottom - rph - 4))
+            p.drawPixmap(rocketx, rockety, rpw, rph, self.rocket)
+        p.setPen(QPen(QColor("#111111")))
+        p.setFont(self.titlefont)
+        p.drawText(left, inner.top()+6, width, 20, Qt.AlignCenter, "Altitude")
+        p.setFont(self.valuefont)
+        p.drawText(left, inner.bottom()-34, width, 28, Qt.AlignCenter, f"{int(self.alt)} m")
         p.end()
 
-# ---------------- CameraBox (small icon controls) ----------------
 class CameraBox(QFrame):
     def __init__(self, title="Camera", parent=None):
         super().__init__(parent)
         self.setStyleSheet("""
-            QFrame { background: #0f1113; border:1px solid #2a2f34; border-radius:10px; }
-            QLabel#title { color: #dfe9f2; font: 10pt 'Segoe UI'; padding-left:6px; }
-            QLabel#view { background: #000000; border-radius:8px; }
-            QPushButton { background: transparent; color: #a6c8ff; border: 1px solid #2a3b56; border-radius:6px; padding:2px; }
-            QPushButton:hover { background: #1b2630; }
+            QFrame {background:#f2f2f2; border:1px solid #cfcfcf; border-radius:10px;}
+            QLabel[objectName=title] {color:#111111; font:10pt "Segoe UI";padding-left:6px;}
+            QLabel[objectName=view] {background:#000;border-radius:8px;}
+            QPushButton {background:transparent; color:#333; border:1px solid #bdbdbd; border-radius:6px; padding:2px;}
+            QPushButton:hover {background:#e0e0e0;}
         """)
-        self.setMinimumSize(320, 220)
-        self.current_file = None
+        self.setMinimumSize(320,220)
+        self.currentfile = None
 
         layout = QVBoxLayout(self)
-        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setContentsMargins(8,8,8,8)
         layout.setSpacing(6)
-
-        title_lbl = QLabel(title)
-        title_lbl.setObjectName("title")
-        title_lbl.setFixedHeight(22)
-        layout.addWidget(title_lbl)
+        titlelbl = QLabel(title)
+        titlelbl.setObjectName("title")
+        titlelbl.setFixedHeight(22)
+        layout.addWidget(titlelbl)
 
         self.view = QLabel()
         self.view.setObjectName("view")
         self.view.setMinimumSize(300, 160)
         self.view.setAlignment(Qt.AlignCenter)
+        blank = QPixmap(self.view.size())
+        blank.fill(QColor("#000000"))
+        self.view.setPixmap(blank)
         layout.addWidget(self.view)
 
-        ctrl_row = QHBoxLayout()
-        ctrl_row.setSpacing(6)
+        ctrlrow = QHBoxLayout()
+        ctrlrow.setSpacing(6)
 
-        # small icon buttons
-        self.upload_btn = QPushButton("⬆")
-        self.upload_btn.setToolTip("Upload")
-        self.upload_btn.setFixedSize(36, 28)
-        self.upload_btn.clicked.connect(self._on_upload)
-        ctrl_row.addWidget(self.upload_btn)
+        self.uploadbtn = QPushButton("⏏")
+        self.uploadbtn.setToolTip("Upload")
+        self.uploadbtn.setFixedSize(36,28)
+        self.uploadbtn.clicked.connect(self.onupload)
+        ctrlrow.addWidget(self.uploadbtn)
 
-        self.play_btn = QPushButton("▶")
-        self.play_btn.setToolTip("Play")
-        self.play_btn.setFixedSize(36, 28)
-        self.play_btn.clicked.connect(self._on_play)
-        ctrl_row.addWidget(self.play_btn)
+        self.playbtn = QPushButton("▶")
+        self.playbtn.setToolTip("Play")
+        self.playbtn.setFixedSize(36,28)
+        self.playbtn.clicked.connect(self.onplay)
+        ctrlrow.addWidget(self.playbtn)
 
-        self.pause_btn = QPushButton("⏸")
-        self.pause_btn.setToolTip("Pause")
-        self.pause_btn.setFixedSize(36, 28)
-        self.pause_btn.clicked.connect(self._on_pause)
-        ctrl_row.addWidget(self.pause_btn)
+        self.pausebtn = QPushButton("⏸")
+        self.pausebtn.setToolTip("Pause")
+        self.pausebtn.setFixedSize(36,28)
+        self.pausebtn.clicked.connect(self.onpause)
+        ctrlrow.addWidget(self.pausebtn)
 
-        self.restart_btn = QPushButton("🔁")
-        self.restart_btn.setToolTip("Restart")
-        self.restart_btn.setFixedSize(36, 28)
-        self.restart_btn.clicked.connect(self._on_restart)
-        ctrl_row.addWidget(self.restart_btn)
+        self.restartbtn = QPushButton("⟲")
+        self.restartbtn.setToolTip("Restart")
+        self.restartbtn.setFixedSize(36,28)
+        self.restartbtn.clicked.connect(self.onrestart)
+        ctrlrow.addWidget(self.restartbtn)
 
-        ctrl_row.addStretch()
+        ctrlrow.addStretch()
+        self.expandbtn = QPushButton("⛶")
+        self.expandbtn.setToolTip("Expand")
+        self.expandbtn.setFixedSize(36,28)
+        self.expandbtn.clicked.connect(self.openexpanded)
+        ctrlrow.addWidget(self.expandbtn)
+        layout.addLayout(ctrlrow)
 
-        self.expand_btn = QPushButton("⛶")
-        self.expand_btn.setToolTip("Expand")
-        self.expand_btn.setFixedSize(36, 28)
-        self.expand_btn.clicked.connect(self._open_expanded)
-        ctrl_row.addWidget(self.expand_btn)
-
-        layout.addLayout(ctrl_row)
-
-        # Optional multimedia playback
         self.player = None
-        self.video_widget = None
-        if _USE_MULTIMEDIA:
+        self.audiooutput = None
+        self.videowidget = None
+        if USE_MULTIMEDIA:
             try:
                 self.player = QMediaPlayer(self)
-                self.audio_output = QAudioOutput(self)
-                self.player.setAudioOutput(self.audio_output)
-                self.video_widget = QVideoWidget(self)
-                self.video_widget.setMinimumSize(300, 160)
-            except Exception as e:
-                print("CameraBox multimedia init failed:", e)
+                self.audiooutput = QAudioOutput(self)
+                self.player.setAudioOutput(self.audiooutput)
+                self.videowidget = QVideoWidget(self)
+                self.videowidget.setMinimumSize(300, 160)
+                self.videowidget.setStyleSheet("background:#000;")
+                self.player.setVideoOutput(self.videowidget)
+            except Exception:
                 self.player = None
-                self.video_widget = None
+                self.audiooutput = None
+                self.videowidget = None
 
-    def _on_upload(self):
+    @silent
+    def onupload(self):
         file, _ = QFileDialog.getOpenFileName(self, "Choose video file", "", "Video Files (*.mp4 *.avi *.mkv *.mov);;All Files (*)")
         if not file:
             return
-        self.current_file = file
-        print("CameraBox: selected", file)
-        if self.player and self.video_widget:
-            parent_layout = self.layout()
-            parent_layout.replaceWidget(self.view, self.video_widget)
+        self.currentfile = file
+        if self.player and self.videowidget:
+            parentlayout = self.layout()
+            idx = parentlayout.indexOf(self.view)
+            if idx != -1:
+                parentlayout.insertWidget(idx, self.videowidget)
+                parentlayout.removeWidget(self.view)
             self.view.hide()
-            self.video_widget.show()
+            self.videowidget.show()
+            self.player.setVideoOutput(self.videowidget)
             self.player.setSource(QUrl.fromLocalFile(file))
+            self.player.setPlaybackRate(1.0)
+            self.player.play()
         else:
             pix = QPixmap(self.view.size())
-            pix.fill(QColor("#070809"))
+            pix.fill(QColor("#e0e0e0"))
             painter = QPainter(pix)
-            painter.setPen(QColor("#bfe1ff"))
+            painter.setPen(QColor("#111111"))
             painter.setFont(QFont("Segoe UI", 10))
             painter.drawText(pix.rect(), Qt.AlignCenter, os.path.basename(file))
             painter.end()
             self.view.setPixmap(pix)
 
-    def _on_play(self):
-        if self.player and self.current_file:
+    @silent
+    def onplay(self):
+        if self.player and self.currentfile:
             self.player.play()
-        else:
-            print("CameraBox: play - no player/file")
 
-    def _on_pause(self):
-        if self.player and self.current_file:
+    @silent
+    def onpause(self):
+        if self.player and self.currentfile:
             self.player.pause()
-        else:
-            print("CameraBox: pause - no player/file")
 
-    def _on_restart(self):
-        if self.player and self.current_file:
+    @silent
+    def onrestart(self):
+        if self.player and self.currentfile:
             self.player.stop()
-            QTimer.singleShot(120, lambda: self.player.play())
-        else:
-            print("CameraBox: restart - no player/file")
+            QTimer.singleShot(100, lambda: self.player.play())
 
-    def update_frame(self, frame_bgr):
-        """Accepts OpenCV BGR frame if cv2 available."""
-        if not _HAS_CV2 or frame_bgr is None:
+    @silent
+    def updateframe(self, framebgr):
+        if not HAS_CV2 or framebgr is None:
             blank = QPixmap(self.view.size())
-            blank.fill(QColor("#000000"))
+            blank.fill(QColor("#000"))
             self.view.setPixmap(blank)
             return
-        try:
-            h, w = frame_bgr.shape[:2]
-            rgb = cv2.cvtColor(frame_bgr, cv2.COLOR_BGR2RGB)
-            bytes_per_line = 3 * w
-            qimg = QImage(rgb.data, w, h, bytes_per_line, QImage.Format_RGB888)
-            pix = QPixmap.fromImage(qimg).scaled(self.view.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
-            self.view.setPixmap(pix)
-        except Exception as e:
-            print("CameraBox.update_frame error:", e)
+        h, w = framebgr.shape[:2]
+        rgb = cv2.cvtColor(framebgr, cv2.COLOR_BGR2RGB)
+        bytesperline = 3 * w
+        qimg = QImage(rgb.data, w, h, bytesperline, QImage.Format_RGB888)
+        pix = QPixmap.fromImage(qimg).scaled(self.view.size(), Qt.KeepAspectRatio, Qt.SmoothTransformation)
+        self.view.setPixmap(pix)
 
-    def _open_expanded(self):
+    @silent
+    def openexpanded(self):
         dlg = QDialog(self.window())
         dlg.setWindowTitle("Camera - Expanded")
         dlg.setModal(True)
         v = QVBoxLayout(dlg)
-        label = QLabel()
-        label.setAlignment(Qt.AlignCenter)
-        if self.view.pixmap():
-            label.setPixmap(self.view.pixmap().scaled(800, 600, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+        # If playing video, reparent the QVideoWidget temporarily
+        is_video = self.player and self.videowidget and self.currentfile
+        if is_video:
+            old_parent = self.videowidget.parentWidget()
+            self.videowidget.setParent(dlg)
+            v.addWidget(self.videowidget)
+            self.videowidget.show()
+            dlg.resize(900, 700)
+            dlg.exec()
+            self.videowidget.setParent(old_parent)
+            old_parent.layout().insertWidget(1, self.videowidget)
+            self.videowidget.setMinimumSize(300, 160)
         else:
-            empty = QPixmap(800, 600)
-            empty.fill(QColor("#000000"))
-            label.setPixmap(empty)
-        v.addWidget(label)
-        dlg.resize(900, 700)
-        dlg.exec()
+            label = QLabel()
+            label.setAlignment(Qt.AlignCenter)
+            if self.view.pixmap():
+                label.setPixmap(self.view.pixmap().scaled(800, 600, Qt.KeepAspectRatio, Qt.SmoothTransformation))
+            else:
+                empty = QPixmap(800, 600)
+                empty.fill(QColor("#000"))
+                label.setPixmap(empty)
+            v.addWidget(label)
+            dlg.resize(900, 700)
+            dlg.exec()
 
-# ---------------- CockpitWidget (assembled) ----------------
 class CockpitWidget(QWidget):
-    def __init__(self, parent=None, rocket_path=r"C:\MERN_TT\assets\rocket.png"):
+    def __init__(self, parent=None, rocketpath=None, telemetrycsv=None):
         super().__init__(parent)
-        print("CockpitWidget: initializing")
-        self.rocket_path = rocket_path
-        self.setStyleSheet("background: #131619; color: #e6eef8; font-family: 'Segoe UI';")
-        self._init_ui()
+        self.setStyleSheet("background:#f2f2f2; color:#111111; font-family:Segoe UI;")
+        self.rocketpath = rocketpath
+        self.telemetrycsv = telemetrycsv
+        self.initui()
+        self.csvrows = []
+        self.csvindex = 0
+        if self.telemetrycsv and os.path.exists(self.telemetrycsv):
+            try:
+                with open(self.telemetrycsv, "r", newline="") as f:
+                    reader = csv.DictReader(f)
+                    self.csvrows = list(reader)
+            except Exception as e:
+                print("Failed to read telemetry CSV:", e)
+        self.demotimer = QTimer(self)
+        self.demotimer.timeout.connect(self.demotick)
+        self.demotimer.start(300)
 
-        # Demo telemetry timer (replace with real wiring)
-        self._demo_timer = QTimer(self)
-        self._demo_timer.timeout.connect(self._demo_tick)
-        self._demo_timer.start(300)
-
-        self._demo_state = {"t": 15.0, "p": 1013.25, "a": 0.0, "alt": 100.0}
-        self._primary_sensor_ok = True
-
-        print("CockpitWidget: initialized")
-
-    def _init_ui(self):
+    def initui(self):
         scroll = QScrollArea()
         scroll.setWidgetResizable(True)
+        scroll.setHorizontalScrollBarPolicy(Qt.ScrollBarAsNeeded)
+        scroll.setVerticalScrollBarPolicy(Qt.ScrollBarAsNeeded)
         content = QWidget()
+        content.setMinimumWidth(1400)
         scroll.setWidget(content)
-
         grid = QGridLayout(content)
         grid.setContentsMargins(12, 8, 12, 8)
         grid.setHorizontalSpacing(18)
         grid.setVerticalSpacing(12)
-
-        # Left column: Plotly gauges
-        self._create_plotly_gauges()
-        left_v = QVBoxLayout()
-        left_v.setSpacing(12)
-        left_v.addWidget(self._wrap_panel(self.g_temp_view, "Temperature"))
-        left_v.addWidget(self._wrap_panel(self.g_pres_view, "Pressure"))
-        left_v.addWidget(self._wrap_panel(self.g_accel_view, "Acceleration"))
-        left_widget = QWidget(); left_widget.setLayout(left_v)
-
-        # Middle: altitude cylinder
-        self.alt = AltitudeCylinder(max_alt=1500, rocket_path=self.rocket_path)
-
-        # Right: camera boxes
-        self.camera_boxes = [CameraBox("Front Camera"), CameraBox("Rear Camera")]
-        right_v = QVBoxLayout()
-        right_v.setSpacing(12)
-        for cam in self.camera_boxes:
-            right_v.addWidget(cam)
-        right_widget = QWidget(); right_widget.setLayout(right_v)
-
-        # grid placement
-        grid.addWidget(left_widget, 0, 0)
+        # Plotly/Simple Gauges left
+        self.createplotlygauges()
+        leftv = QVBoxLayout()
+        leftv.setSpacing(12)
+        leftv.addWidget(self.wrappanel(self.gtempview, "Temperature"))
+        leftv.addWidget(self.wrappanel(self.gpresview, "Pressure"))
+        leftv.addWidget(self.wrappanel(self.gaccelview, "Acceleration"))
+        leftwidget = QWidget()
+        leftwidget.setLayout(leftv)
+        # Camera boxes right
+        self.cameraboxes = [
+            CameraBox("Front Camera"),
+            CameraBox("Rear Camera"),
+        ]
+        rightv = QVBoxLayout()
+        rightv.setSpacing(12)
+        for cam in self.cameraboxes:
+            rightv.addWidget(cam)
+        rightwidget = QWidget()
+        rightwidget.setLayout(rightv)
+        self.alt = AltitudeCylinder(maxalt=1500, rocketpath=self.rocketpath)
+        grid.addWidget(leftwidget, 0, 0)
         grid.addWidget(self.alt, 0, 1)
-        grid.addWidget(right_widget, 0, 2)
-
+        grid.addWidget(rightwidget, 0, 2)
         grid.setColumnStretch(0, 3)
         grid.setColumnStretch(1, 1)
         grid.setColumnStretch(2, 3)
-
         outer = QVBoxLayout(self)
         outer.addWidget(scroll)
         self.setLayout(outer)
 
-    def _wrap_panel(self, widget, label_text):
+    def wrappanel(self, widget, labeltext):
         frame = QFrame()
         frame.setFrameShape(QFrame.StyledPanel)
-        frame.setStyleSheet("QFrame { background: #0e1113; border-radius:10px; border:1px solid #1d2830; }")
+        frame.setStyleSheet("QFrame{background:#f2f2f2; border-radius:10px; border:1px solid #cfcfcf;}")
         layout = QHBoxLayout(frame)
-        layout.setContentsMargins(8, 8, 8, 8)
+        layout.setContentsMargins(8,8,8,8)
         layout.addWidget(widget, 4)
-
-        led = QLabel("●")
-        led.setStyleSheet("color: limegreen; font-size: 20px;")
-        led.setFixedWidth(26)
-        layout.addWidget(led, 1)
-
-        lbl = QLabel(label_text)
+        lbl = QLabel(labeltext)
         lbl.setAlignment(Qt.AlignCenter)
         lbl.setFixedWidth(72)
         layout.addWidget(lbl, 1)
-
-        frame._led = led
+        frame.label = lbl
         return frame
 
-    def _create_plotly_gauges(self):
-        # initial values
+    def createplotlygauges(self):
         t0, p0, a0 = 20.0, 1013.25, 0.0
-        # prepare HTML for gauges (bright text color)
-        text_color = "#e6eef8"
-        self._g_temp_html = make_plotly_gauge_html("Temperature (°C)", -50, 150, t0, bar_color="#FF7043", text_color=text_color)
-        self._g_pres_html = make_plotly_gauge_html("Pressure (Pa)", 800, 1200, p0, bar_color="#42A5F5", text_color=text_color)
-        self._g_accel_html = make_plotly_gauge_html("Acceleration (m/s²)", 0, 20, a0, bar_color="#66BB6A", text_color=text_color)
-
-        # Create views (or fallback)
-        if _HAS_WEBENGINE:
-            self.g_temp_view = QWebEngineView()
-            self.g_temp_view.setHtml(self._g_temp_html, QUrl("about:blank"))
-            self.g_temp_view.setMinimumSize(320, 180)
-
-            self.g_pres_view = QWebEngineView()
-            self.g_pres_view.setHtml(self._g_pres_html, QUrl("about:blank"))
-            self.g_pres_view.setMinimumSize(320, 180)
-
-            self.g_accel_view = QWebEngineView()
-            self.g_accel_view.setHtml(self._g_accel_html, QUrl("about:blank"))
-            self.g_accel_view.setMinimumSize(320, 180)
+        textcolor = "#111111"
+        self.gtemphtml = make_plotly_gauge_html("Temperature (C)", -50, 150, t0, barcolor="#FF7043", textcolor=textcolor)
+        self.gpreshtml = make_plotly_gauge_html("Pressure (Pa)", 800, 1200, p0, barcolor="#42A5F5", textcolor=textcolor)
+        self.gaccelhtml = make_plotly_gauge_html("Acceleration (m/s²)", 0, 20, a0, barcolor="#66BB6A", textcolor=textcolor)
+        if HAS_WEBENGINE:
+            self.gtempview = QWebEngineView()
+            self.gtempview.setHtml(self.gtemphtml, QUrl("about:blank"))
+            self.gtempview.setMinimumSize(320,180)
+            self.gpresview = QWebEngineView()
+            self.gpresview.setHtml(self.gpreshtml, QUrl("about:blank"))
+            self.gpresview.setMinimumSize(320,180)
+            self.gaccelview = QWebEngineView()
+            self.gaccelview.setHtml(self.gaccelhtml, QUrl("about:blank"))
+            self.gaccelview.setMinimumSize(320,180)
         else:
-            def simple_label(txt):
+            def simplelabel(txt):
                 l = QLabel(txt)
                 l.setFixedHeight(180)
                 l.setAlignment(Qt.AlignCenter)
-                l.setStyleSheet("background:#0b0c0d; border-radius:8px; color:#cfe8ff")
+                l.setStyleSheet("background:#e8e8e8; border-radius:8px; color:#111111;")
                 return l
-            self.g_temp_view = simple_label("Temperature\n(Plotly missing)")
-            self.g_pres_view = simple_label("Pressure\n(Plotly missing)")
-            self.g_accel_view = simple_label("Acceleration\n(Plotly missing)")
+            self.gtempview = simplelabel("Temperature\nPlotly missing")
+            self.gpresview = simplelabel("Pressure\nPlotly missing")
+            self.gaccelview = simplelabel("Acceleration\nPlotly missing")
 
-    # Demo telemetry generator
-    def _demo_tick(self):
-        s = self._demo_state
-        s["t"] += 0.4
-        if s["t"] > 120:
-            s["t"] = -20
-        s["p"] += (math.sin(s["t"] / 9.0) * 0.6)
-        s["a"] = abs(math.sin(s["t"] / 8.0) * 8.0)
-        s["alt"] = min(1500, s["alt"] + 2.8)
-        row = {"Temp_C": s["t"], "Pressure_Pa": s["p"], "Accel_m_s2": s["a"], "Altitude_m": s["alt"]}
-        # demo redundant toggle occasionally
-        primary_ok = (int(time.time()) % 40) < 35
-        self.set_redundant_mode(not primary_ok)
-        self.updateFromRow(row)
-
-    @safe
-    def updateFromRow(self, row):
-        """
-        row: dict with keys 'Temp_C', 'Pressure_Pa', 'Accel_m_s2', 'Altitude_m'
-        Call this from your telemetry reader.
-        """
-        try:
-            if 'Temp_C' in row:
-                self._update_plotly_view(self.g_temp_view, row['Temp_C'])
-            if 'Pressure_Pa' in row:
-                self._update_plotly_view(self.g_pres_view, row['Pressure_Pa'])
-            if 'Accel_m_s2' in row:
-                self._update_plotly_view(self.g_accel_view, row['Accel_m_s2'])
-            if 'Altitude_m' in row:
-                self.alt.setAltitude(row['Altitude_m'])
-        except Exception as e:
-            print("updateFromRow error:", e)
-
-    def _update_plotly_view(self, webview, value):
-        if not _HAS_WEBENGINE or webview is None:
+    @silent
+    def updateplotlyview(self, webview, value):
+        if not HAS_WEBENGINE or webview is None:
             return
-        try:
-            js = f"window.updateGauge({float(value)});"
-            webview.page().runJavaScript(js)
-        except Exception as e:
-            print("Error updating plotly gauge:", e)
+        js = f"window.updateGauge({float(value)})"
+        webview.page().runJavaScript(js)
 
-    def set_redundant_mode(self, active):
-        """Switch LED color to indicate primary sensor failure (active=True means redundant active)."""
-        print("CockpitWidget: set_redundant_mode:", active)
-        for frame in self.findChildren(QFrame):
-            led = getattr(frame, "_led", None)
-            if led:
-                if active:
-                    led.setStyleSheet("color: orange; font-size: 20px;")
-                else:
-                    led.setStyleSheet("color: limegreen; font-size: 20px;")
-
-    def update_camera_frame(self, index, frame_bgr):
-        if 0 <= index < len(self.camera_boxes):
-            self.camera_boxes[index].update_frame(frame_bgr)
+    @silent
+    def demotick(self):
+        # If CSV available, play rows; otherwise, step demo mode
+        if self.csvrows:
+            row = self.csvrows[self.csvindex % len(self.csvrows)]
+            self.updateFromRow(row)
+            self.csvindex = (self.csvindex + 1) % len(self.csvrows)
         else:
-            print("update_camera_frame: index out of range", index)
+            if not hasattr(self, "demostate"):
+                self.demostate = {"t":15.0, "p":1013.25, "a":0.0, "alt":100.0}
+            s = self.demostate
+            s["t"] = max(-20, min(120, s["t"] + 0.3))
+            s["p"] = 900 + 50*math.sin(s["t"]/9.0)
+            s["a"] = abs(math.sin(s["t"]/8.0))*8.0
+            s["alt"] = min(1500, s["alt"] + 2.2)
+            row = {
+                "TempC": s["t"],
+                "PressurePa": s["p"],
+                "Accelms2": s["a"],
+                "Altitudem": s["alt"],
+            }
+            self.updateFromRow(row)
 
-# ---------------- Floating window wrapper ----------------
+    @silent
+    def updateFromRow(self, row):
+        try:
+            if "TempC" in row and row["TempC"] not in (None, ""):
+                self.updateplotlyview(self.gtempview, float(row["TempC"]))
+            if "PressurePa" in row and row["PressurePa"] not in (None, ""):
+                self.updateplotlyview(self.gpresview, float(row["PressurePa"]))
+            if "Accelms2" in row and row["Accelms2"] not in (None, ""):
+                self.updateplotlyview(self.gaccelview, float(row["Accelms2"]))
+            if "Altitudem" in row and row["Altitudem"] not in (None, ""):
+                self.alt.setAltitude(float(row["Altitudem"]))
+        except Exception as e:
+            print("updateFromRow error", e)
+
 class CockpitFloatingWindow(QDialog):
-    def __init__(self, parent=None, rocket_path=r"C:\MERN_TT\assets\rocket.png"):
+    def __init__(self, parent=None, rocketpath=None, telemetrycsv=None):
         super().__init__(parent)
-        print("CockpitFloatingWindow: opening")
         self.setWindowTitle("Cockpit Gauges")
         self.setModal(False)
         self.resize(1100, 720)
-        self.setStyleSheet("background:#111316;")
+        self.setStyleSheet("background:#f2f2f2;")
         layout = QVBoxLayout(self)
-        self.cockpit = CockpitWidget(self, rocket_path=rocket_path)
+        self.cockpit = CockpitWidget(self, rocketpath=rocketpath, telemetrycsv=telemetrycsv)
         layout.addWidget(self.cockpit)
-        btn_row = QHBoxLayout()
-        btn_row.addStretch()
-        close_btn = QPushButton("Close")
-        close_btn.setFixedHeight(30)
-        close_btn.clicked.connect(self.close)
-        btn_row.addWidget(close_btn)
-        layout.addLayout(btn_row)
+        btnrow = QHBoxLayout()
+        btnrow.addStretch()
+        closebtn = QPushButton("Close")
+        closebtn.setFixedHeight(30)
+        closebtn.clicked.connect(self.close)
+        btnrow.addWidget(closebtn)
+        layout.addLayout(btnrow)
 
     def updateFromRow(self, row):
         self.cockpit.updateFromRow(row)
 
-# Expose public classes
-__all__ = ["CockpitWidget", "CockpitFloatingWindow"]
-
-# ---------------- standalone demo ----------------
-if __name__ == "__main__":
-    print("cockpit_tab.py standalone demo")
+if __name__ == '__main__':
     app = QApplication(sys.argv)
-
-    rocket_default = r"C:\MERN_TT\assets\rocket.png"
-    if not os.path.exists(rocket_default):
-        rocket_default = None
-
-    w = CockpitFloatingWindow(rocket_path=rocket_default)
+    rocket_default = "rCTT.png" if os.path.exists("rCTT.png") else None
+    csvfile = "telemetry.csv" if os.path.exists("telemetry.csv") else None
+    w = CockpitFloatingWindow(rocketpath=rocket_default, telemetrycsv=csvfile)
     w.show()
-
-    # Fill demo camera frames (black)
-    def fill_demo_frames():
-        for cb in w.cockpit.camera_boxes:
+    def filldemoframes():
+        for cb in w.cockpit.cameraboxes:
             px = QPixmap(cb.view.size())
             px.fill(QColor("#000000"))
             cb.view.setPixmap(px)
-    fill_demo_frames()
-
+    filldemoframes()
     sys.exit(app.exec())
