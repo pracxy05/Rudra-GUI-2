@@ -1,72 +1,20 @@
-# gpstab.py
-import os, tempfile, math, numpy as np, pandas as pd
+# C:\MERN_TT\tabs\gpstab.py
+import os, time, math
+import numpy as np
+import pandas as pd
 
-# Guard joblib
-try:
-    import joblib
-except Exception:
-    joblib = None
-
-# Guard WebEngine
+from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
+from PySide6.QtCore import QTimer, QUrl, Slot, QThread
 try:
     from PySide6.QtWebEngineWidgets import QWebEngineView
 except Exception:
     QWebEngineView = None
 
-from PySide6.QtWidgets import QWidget, QVBoxLayout, QLabel
-from PySide6.QtCore import QTimer, QUrl, Slot
-
-# Try to import ROCKET_PARAMS from plottab, else define local fallback (avoid importing WebEngine via plottab)
+# Workers (prediction + folium rendering)
 try:
-    from plottab import ROCKET_PARAMS, generate_trajectory as _gen_traj
-    def generate_trajectory(params, t_max=60.0, dt=0.1):
-        return _gen_traj(params, t_max=t_max, dt=dt)
+    from tabs.gps_ml_workers import LandingPredictWorker, FoliumRenderWorker
 except Exception:
-    ROCKET_PARAMS = {
-        "apogee_m": 1076.0, "apogee_tol_m": 5.0, "descent_rate_m_s": 4.36,
-        "stability_margin_cal": 2.08, "flight_time_s": 249.0,
-        "max_vel_m_s": 148.0, "max_acc_m_s2": 102.0,
-        "burnout_t": 3.81, "apogee_t": 15.74, "burnout_alt": 350.0,
-    }
-    def generate_trajectory(params, t_max=60.0, dt=0.1):
-        t = np.arange(0.0, t_max + 1e-9, dt)
-        burnout_t = params.get("burnout_t", 3.81)
-        apogee_t = params.get("apogee_t", 15.74)
-        burnout_alt = params.get("burnout_alt", 350.0)
-        apogee = params.get("apogee_m", 1076.0)
-        descent_rate = params.get("descent_rate_m_s", 4.36)
-        max_acc = params.get("max_acc_m_s2", 102.0)
-        max_vel = params.get("max_vel_m_s", 148.0)
-        a_est = (2 * burnout_alt) / (burnout_t ** 2) if burnout_t > 0 else 5.0
-        a_used = min(a_est, max_acc)
-        v_burn = min(a_used * burnout_t, max_vel)
-        def hermite(ti, t0, t1, y0, y1, v0, v1):
-            s = np.clip((ti - t0) / (t1 - t0), 0.0, 1.0)
-            h00 = (2*s**3 - 3*s**2 + 1); h10 = (s**3 - 2*s**2 + s)
-            h01 = (-2*s**3 + 3*s**2);    h11 = (s**3 - s**2)
-            return h00*y0 + h10*(t1-t0)*v0 + h01*y1 + h11*(t1-t0)*v1
-        alt = np.zeros_like(t); vel = np.zeros_like(t); acc = np.zeros_like(t)
-        for i, ti in enumerate(t):
-            if ti <= burnout_t:
-                alt[i] = 0.5 * a_used * (ti**2); vel[i] = a_used * ti; acc[i] = a_used
-            elif ti <= apogee_t:
-                alt[i] = hermite(ti, burnout_t, apogee_t, burnout_alt, apogee, v_burn, 0.0)
-                dt_small = 1e-3
-                alt_plus = hermite(ti + dt_small, burnout_t, apogee_t, burnout_alt, apogee, v_burn, 0.0)
-                vel[i] = (alt_plus - alt[i]) / dt_small
-                alt_minus = hermite(ti - dt_small, burnout_t, apogee_t, burnout_alt, apogee, v_burn, 0.0)
-                acc[i] = (alt_plus - 2*alt[i] + alt_minus) / (dt_small**2)
-            else:
-                down_t = ti - apogee_t
-                alt[i] = max(apogee - descent_rate * down_t, 0.0)
-                vel[i] = -descent_rate; acc[i] = 0.0
-        P0 = 101325.0; H = 8000.0
-        pressure = P0 * np.exp(-alt / H)
-        return t, alt, vel, acc, pressure
-
-MODEL_FILE = "models/plot_predictor.pkl"
-FALLBACK_MODEL = "models/plot_predictor.pkl"
-os.makedirs("models", exist_ok=True)
+    from .gps_ml_workers import LandingPredictWorker, FoliumRenderWorker
 
 def _to_float(x):
     try:
@@ -76,15 +24,26 @@ def _to_float(x):
         return None
 
 class GPSTab(QWidget):
-    def __init__(self, csv_path: str = None, logger=None):
+    def __init__(self, csv_path: str = None, logger=None, sender=None, receiver=None):
         super().__init__()
         self.csv_path = csv_path
         self.logger = logger
-        self.lat, self.lon, self.alt = [], [], []
-        self.model = self._maybe_load_model()
+        self.sender = sender     # (lat, lon) or None
+        self.receiver = receiver # (lat, lon) or None
+
+        self.lat = []
+        self.lon = []
+        self.alt = []
+        self._last_render = 0.0
+        self._predict_thread = None
+        self._predict_worker = None
+        self._render_thread = None
+        self._render_worker = None
+        self._throttle_s = 2.0
+        self._pending_render = False
 
         layout = QVBoxLayout(self)
-        self.label = QLabel("🗺️ GPS Tracking with ML Landing Prediction")
+        self.label = QLabel("GPS Tracking with Landing Prediction")
         layout.addWidget(self.label)
 
         if QWebEngineView is not None:
@@ -92,27 +51,20 @@ class GPSTab(QWidget):
             layout.addWidget(self.webview, stretch=1)
         else:
             self.webview = None
-            warn = QLabel("QWebEngine not available — install PySide6-WebEngine to enable map")
-            layout.addWidget(warn)
+            layout.addWidget(QLabel("QWebEngine not available — install PySide6-WebEngine to enable map"))
 
         self.setLayout(layout)
 
+        # CSV fallback polling
         self.timer = QTimer(self)
         self.timer.setInterval(2000)
         self.timer.timeout.connect(self._periodic_update)
         self.timer.start()
 
-    def _maybe_load_model(self):
-        if not joblib:
-            return None
-        try:
-            if os.path.exists(MODEL_FILE):
-                return joblib.load(MODEL_FILE)
-            elif os.path.exists(FALLBACK_MODEL):
-                return joblib.load(FALLBACK_MODEL)
-        except Exception as e:
-            print("[GPSTab] model load error:", e)
-        return None
+    # Allow setting sender/receiver later
+    def set_references(self, sender=None, receiver=None):
+        self.sender = sender or self.sender
+        self.receiver = receiver or self.receiver
 
     @Slot(dict)
     def append_live_data(self, row: dict):
@@ -124,78 +76,106 @@ class GPSTab(QWidget):
             if la is None or lo is None:
                 return
             self.lat.append(la); self.lon.append(lo); self.alt.append(altv if altv is not None else 0.0)
-            if len(self.lat) > 800:
-                self.lat = self.lat[-800:]; self.lon = self.lon[-800:]; self.alt = self.alt[-800:]
-            self._render_map()
+            if len(self.lat) > 1000:
+                self.lat = self.lat[-1000:]; self.lon = self.lon[-1000:]; self.alt = self.alt[-1000:]
+            self._schedule()
         except Exception as e:
             print("[GPSTab] append_live_data error:", e)
 
     def _periodic_update(self):
-        if self.csv_path and os.path.exists(self.csv_path):
-            try:
-                df = pd.read_csv(self.csv_path)
-                if "gps_lat" in df.columns and "gps_lon" in df.columns:
-                    la = df["gps_lat"].dropna().tolist()
-                    lo = df["gps_lon"].dropna().tolist()
-                    alt = df.get("gps_alt", df.get("bmp_alt", pd.Series([0]*len(df)))).fillna(0).tolist()
-                    n = min(len(la), len(lo), len(alt))
-                    if n > 0:
-                        self.lat = la[-n:]; self.lon = lo[-n:]; self.alt = alt[-n:]
-                        self._render_map()
-            except Exception as e:
-                print("[GPSTab] CSV read error:", e)
-                if self.logger:
-                    self.logger.add_log("ERROR", "GPSTab CSV", str(e))
+        if not self.csv_path or not os.path.exists(self.csv_path):
+            return
+        try:
+            df = pd.read_csv(self.csv_path)
+            if "gps_lat" in df.columns and "gps_lon" in df.columns:
+                la = df["gps_lat"].dropna().tolist()
+                lo = df["gps_lon"].dropna().tolist()
+                alt = df.get("gps_alt", df.get("bmp_alt", pd.Series([0]*len(df)))).fillna(0).tolist()
+                n = min(len(la), len(lo), len(alt))
+                if n > 0:
+                    self.lat = la[-n:]; self.lon = lo[-n:]; self.alt = alt[-n:]
+                    self._schedule()
+        except Exception as e:
+            print("[GPSTab] CSV read error:", e)
+            if self.logger: self.logger.add_log("ERROR", "GPSTab CSV", str(e))
 
-    def _render_map(self):
+    def _schedule(self):
+        now = time.time()
         if self.webview is None:
-            return  # no WebEngine — skip
+            return
+        if (now - self._last_render) < self._throttle_s or self._pending_render:
+            return
+        self._pending_render = True
+        self._last_render = now
+
+        # Snapshot latest
+        if not self.lat or not self.lon:
+            self._pending_render = False
+            return
+        lat0 = self.lat[-1]; lon0 = self.lon[-1]; alt0 = (self.alt[-1] if self.alt else 0.0)
+
+        # Start prediction worker (wind unknown -> 0; you can wire live wind if available)
+        self._predict_thread = QThread()
+        self._predict_worker = LandingPredictWorker(lat0, lon0, alt0, 0.0, 0.0)
+        self._predict_worker.moveToThread(self._predict_thread)
+        self._predict_worker.finished.connect(self._on_predicted)
+        self._predict_worker.error.connect(self._on_predict_error)
+        self._predict_worker.finished.connect(self._predict_thread.quit)
+        self._predict_worker.error.connect(self._predict_thread.quit)
+        self._predict_thread.started.connect(self._predict_worker.run)
+        self._predict_thread.finished.connect(self._predict_worker.deleteLater)
+        self._predict_thread.start()
+
+    @Slot(dict)
+    def _on_predicted(self, result: dict):
         try:
-            import folium
-            if not self.lat or not self.lon:
-                return
-            n = min(len(self.lat), len(self.lon))
-            lat_list = self.lat[-n:]; lon_list = self.lon[-n:]; alt_list = (self.alt[-n:] if self.alt else [0]*n)
-            center = [lat_list[-1], lon_list[-1]]
-            m = folium.Map(location=center, zoom_start=13, tiles="OpenStreetMap")
-            folium.PolyLine(list(zip(lat_list, lon_list)), color="blue", weight=2).add_to(m)
-            folium.CircleMarker(location=center, radius=6, color="red", fill=True).add_to(m)
+            center = result.get("center")
+            radius_m = float(result.get("radius_m", 150.0))
+            path = result.get("path", [])
 
-            path, ellipse = self._predict_path_and_ellipse(center[0], center[1], alt_list[-1] if alt_list else 0.0)
-            if path and len(path) > 1:
-                folium.PolyLine(path, color="magenta", weight=2, opacity=0.8).add_to(m)
-            if ellipse and len(ellipse) > 3:
-                folium.Polygon(ellipse, color="red", fill=True, fill_opacity=0.2).add_to(m)
+            # Build ellipse polygon points
+            from tabs.gps_ml_workers import _ellipse
+            ellipse = _ellipse(center[0], center[1], radius_m, points=64)
 
-            tmp = tempfile.NamedTemporaryFile(delete=False, suffix=".html")
-            m.save(tmp.name); tmp.close()
-            self.webview.setUrl(QUrl.fromLocalFile(tmp.name))
+            # Render worker
+            self._render_thread = QThread()
+            self._render_worker = FoliumRenderWorker(
+                self.lat, self.lon,
+                center=center,
+                ellipse_pts=ellipse,
+                sender=self.sender,
+                receiver=self.receiver,
+                current=(self.lat[-1], self.lon[-1]),
+                path=path,
+                zoom=13
+            )
+            self._render_worker.moveToThread(self._render_thread)
+            self._render_worker.finished.connect(self._on_rendered)
+            self._render_worker.error.connect(self._on_render_error)
+            self._render_worker.finished.connect(self._render_thread.quit)
+            self._render_worker.error.connect(self._render_thread.quit)
+            self._render_thread.started.connect(self._render_worker.run)
+            self._render_thread.finished.connect(self._render_worker.deleteLater)
+            self._render_thread.start()
         except Exception as e:
-            print("[GPSTab] render error:", e)
+            print("[GPSTab] on_predicted error:", e)
+            self._pending_render = False
 
-    def _predict_path_and_ellipse(self, lat0, lon0, alt0):
+    @Slot(str)
+    def _on_rendered(self, html_path: str):
         try:
-            times = np.linspace(0, 40, 25)
-            if self.model is not None:
-                Xp = np.vstack([times, np.zeros_like(times), np.zeros_like(times), np.full_like(times, 101325)]).T
-                alt_preds = self.model.predict(Xp)
-            else:
-                _, alt_preds, _, _, _ = generate_trajectory(ROCKET_PARAMS, t_max=40.0, dt=40.0/len(times))
-            path = []
-            for i, a in enumerate(alt_preds):
-                drift_m = max(5.0, (i+1)**1.2) + max(0.0, (alt0 - a) * 0.05)
-                drift_deg = drift_m / 111000.0
-                new_lat = lat0 - drift_deg * 0.6
-                new_lon = lon0 + drift_deg * 1.0
-                path.append((new_lat, new_lon))
-                if a <= 0:
-                    break
-            r_m = 300.0 + 0.2 * alt0
-            r_deg_lat = r_m / 111000.0
-            r_deg_lon = r_deg_lat * 1.3
-            angles = np.linspace(0, 2*math.pi, 48)
-            ellipse = [(lat0 + r_deg_lat * math.cos(a), lon0 + r_deg_lon * math.sin(a)) for a in angles]
-            return path, ellipse
-        except Exception as e:
-            print("[GPSTab] predict error:", e)
-            return [(lat0, lon0)], []
+            if html_path and self.webview is not None:
+                from PySide6.QtCore import QUrl
+                self.webview.setUrl(QUrl.fromLocalFile(html_path))
+        finally:
+            self._pending_render = False
+
+    @Slot(str)
+    def _on_predict_error(self, msg: str):
+        print("[GPSTab] prediction error:", msg)
+        self._pending_render = False
+
+    @Slot(str)
+    def _on_render_error(self, msg: str):
+        print("[GPSTab] render error:", msg)
+        self._pending_render = False

@@ -1,7 +1,0 @@
-Time,Type,Location,Message,Details,ML_Flag,ML_Details
-2025-10-04 01:32:40.435,INFO,SYSTEM,Log tab initialized.,Log tab initialized.,0,
-2025-10-04 01:32:40.437,WARNING,COMM,Simulated comms warning: RSSI below threshold,RSSI dropped to -110dBm at T+35.8s. COMMS could become unreliable.,0,
-2025-10-04 01:32:40.440,ERROR,Telemetry,Telemetry read error.,INT-321: Buffer overflow in telemetry receiver at T+11.2s. Data dropped.,1,Keyword 'overflow' detected.
-2025-10-04 01:32:40.444,CRITICAL,FlightCtrl,CRITICAL: Core fault—Failsafe engaged.,Exception raised: AssertionError. Traceback (most recent call last): ...,1,Critical error - flagged by ML
-2025-10-04 01:32:40.448,WARNING,Battery,Voltage approaching lower threshold.,"Battery below 25%, main pack at 7.2V, consider descent.",0,
-2025-10-04 01:32:40.450,INFO,SYSTEM,All demo logs above are for startup testing. Remove these lines in production.,All demo logs above are for startup testing. Remove these lines in production.,0,

@@ -1,0 +1,126 @@
+
+[0784] [INA219] Voltage=32.76 V, Current=nan mA
+
+[0785] [GPS] Searching for fix...
+
+[0786] [XBee] Data transmitted:
+
+[0787] TIME:41:160:0;TEMP:31.51;HUM:57.73;GAS:24.26;ACC:0.00,0.00,0.00;GYRO:0.00,0.00,0.00;MAG:0.00,0.00,0.00;PRES:946.86;ALT:nan;GPS_RAW:;LATLON:N/A;VOLT:32.76;CURR:nan;EVENT:None;BEACON:ON
+       → CSV-LIKE DATA DETECTED!
+
+[0788] [XBee] Transmission Status: SUCCESS
+
+[0789] =====================================================
+
+[0790] [RTC] Time: 41:162:0
+
+[0791] [BNO055] Orientation -> X=0.00°, Y=0.00°, Z=0.00°
+       → Special chars: °(U+00B0), °(U+00B0), °(U+00B0)
+
+[0792] [BNO055] Accel -> X=0.00, Y=0.00, Z=0.00 m/s²
+       → Special chars: ²(U+00B2)
+       → SENSOR DATA LINE!
+
+[0793] [BNO055] Gyro -> X=0.00, Y=0.00, Z=0.00 °/s
+       → Special chars: °(U+00B0)
+       → SENSOR DATA LINE!
+
+[0794] [BNO055] Mag -> X=0.00, Y=0.00, Z=0.00 uT
+       → SENSOR DATA LINE!
+
+[0795] [BME680] Temp=31.65°C, Hum=57.53%, Gas=23.84 KΩ, Pressure=946.89 hPa
+       → Special chars: °(U+00B0), Ω(U+03A9)
+       → ENVIRONMENT DATA!
+
+[0796] [DPS310] Temp=nan°C, Pressure=nan hPa
+       → Special chars: °(U+00B0)
+       → ENVIRONMENT DATA!
+
+[0797] [Altitude] Triangulated Altitude=-nan m
+
+[0798] [INA219] Voltage=32.76 V, Current=nan mA
+
+[0799] [GPS] Searching for fix...
+
+[0800] [XBee] Data transmitted:
+
+[0801] TIME:41:162:0;TEMP:31.65;HUM:57.53;GAS:23.84;ACC:0.00,0.00,0.00;GYRO:0.00,0.00,0.00;MAG:0.00,0.00,0.00;PRES:946.89;ALT:nan;GPS_RAW:;LATLON:N/A;VOLT:32.76;CURR:nan;EVENT:None;BEACON:ON
+       → CSV-LIKE DATA DETECTED!
+
+[0802] [XBee] Transmission Status: SUCCESS
+
+[0803] =====================================================
+
+[0804] [RTC] Time: 41:163:0
+
+[0805] [BNO055] Orientation -> X=0.00°, Y=0.00°, Z=0.00°
+       → Special chars: °(U+00B0), °(U+00B0), °(U+00B0)
+
+[0806] [BNO055] Accel -> X=0.00, Y=0.00, Z=0.00 m/s²
+       → Special chars: ²(U+00B2)
+       → SENSOR DATA LINE!
+
+[0807] [BNO055] Gyro -> X=0.00, Y=0.00, Z=0.00 °/s
+       → Special chars: °(U+00B0)
+       → SENSOR DATA LINE!
+
+[0808] [BNO055] Mag -> X=0.00, Y=0.00, Z=0.00 uT
+       → SENSOR DATA LINE!
+
+[0809] [BME680] Temp=31.79°C, Hum=57.31%, Gas=23.63 KΩ, Pressure=946.89 hPa
+       → Special chars: °(U+00B0), Ω(U+03A9)
+       → ENVIRONMENT DATA!
+
+[0810] [DPS310] Temp=nan°C, Pressure=nan hPa
+       → Special chars: °(U+00B0)
+       → ENVIRONMENT DATA!
+
+[0811] [Altitude] Triangulated Altitude=-nan m
+
+[0812] [INA219] Voltage=32.76 V, Current=nan mA
+
+[0813] [GPS] Searching for fix...
+
+[0814] [XBee] Data transmitted:
+
+[0815] TIME:41:163:0;TEMP:31.79;HUM:57.31;GAS:23.63;ACC:0.00,0.00,0.00;GYRO:0.00,0.00,0.00;MAG:0.00,0.00,0.00;PRES:946.89;ALT:nan;GPS_RAW:;LATLON:N/A;VOLT:32.76;CURR:nan;EVENT:None;BEACON:ON
+       → CSV-LIKE DATA DETECTED!
+
+[0816] [XBee] Transmission Status: SUCCESS
+
+[0817] =====================================================
+
+[0818] [RTC] Time: 41:164:0
+
+[0819] [BNO055] Orientation -> X=0.00°, Y=0.00°, Z=0.00°
+       → Special chars: °(U+00B0), °(U+00B0), °(U+00B0)
+
+[0820] [BNO055] Accel -> X=0.00, Y=0.00, Z=0.00 m/s²
+       → Special chars: ²(U+00B2)
+       → SENSOR DATA LINE!
+
+[0821] [BNO055] Gyro -> X=0.00, Y=0.00, Z=0.00 °/s
+       → Special chars: °(U+00B0)
+       → SENSOR DATA LINE!
+
+[0822] [BNO055] Mag -> X=0.00, Y=0.00, Z=0.00 uT
+       → SENSOR DATA LINE!
+
+[0823] [BME680] Temp=31.94°C, Hum=57.10%, Gas=23.41 KΩ, Pressure=946.89 hPa
+       → Special chars: °(U+00B0), Ω(U+03A9)
+       → ENVIRONMENT DATA!
+
+[0824] [DPS310] Temp=nan°C, Pressure=nan hPa
+       → Special chars: °(U+00B0)
+       → ENVIRONMENT DATA!
+
+[0825] [Altitude] Triangulated Altitude=-nan m
+
+[0826] [INA219] Voltage=32.76 V, Current=nan mA
+
+[0827] [GPS] Searching for fix...
+
+[0828] [XBee] Data transmitted:
+
+[0829] TIME:41:164:0;TEMP:31.94;HUM:57.10;GAS:23.41;ACC:0.00,0.00,0.00;GYRO:0.00,0.00,0.00;MAG:0.00,0.00,0.00;PRES:946.89;ALT:nan;GPS_RAW:;LATLON:N/A;VOLT:32.76;CURR:nan;EVENT:None;BEACON:ON
+       → CSV-LIKE DATA DETECTED!
